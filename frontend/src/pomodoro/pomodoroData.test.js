@@ -7,6 +7,11 @@ import {
   ACHIEVEMENTS,
   XP_PER_SESSION,
   XP_PER_LEVEL,
+  XP_BY_DURATION,
+  xpForDuration,
+  totalFocusMinutes,
+  bestWeekCount,
+  sessionsThisWeek,
 } from '../pomodoro/pomodoroData';
 
 // localStorage mock
@@ -78,6 +83,15 @@ describe('recordSession', () => {
     const { newlyUnlocked } = recordSession(25);
     expect(newlyUnlocked.some((a) => a.id === 'first_session')).toBe(false);
   });
+
+  test('returns xpGained equal to xpForDuration of the session', () => {
+    const { xpGained } = recordSession(35);
+    expect(xpGained).toBe(xpForDuration(35));
+  });
+
+  test('awards more XP for a longer session (45m vs 15m)', () => {
+    expect(xpForDuration(45)).toBeGreaterThan(xpForDuration(15));
+  });
 });
 
 describe('sessionsPerDay', () => {
@@ -116,6 +130,12 @@ describe('ACHIEVEMENTS', () => {
     }
   });
 
+  test('all achievements have a progress function', () => {
+    for (const ach of ACHIEVEMENTS) {
+      expect(typeof ach.progress).toBe('function');
+    }
+  });
+
   test('five_sessions achievement requires 5 sessions', () => {
     const ach = ACHIEVEMENTS.find((a) => a.id === 'five_sessions');
     const makeSessions = (n) =>
@@ -126,5 +146,119 @@ describe('ACHIEVEMENTS', () => {
       }));
     expect(ach.check(makeSessions(4))).toBe(false);
     expect(ach.check(makeSessions(5))).toBe(true);
+  });
+
+  test('twenty_five_sessions achievement requires 25 sessions', () => {
+    const ach = ACHIEVEMENTS.find((a) => a.id === 'twenty_five_sessions');
+    const make = (n) => Array.from({ length: n }, (_, i) => ({
+      date: `2024-01-01`,
+      completedAt: `2024-01-01T${String(i).padStart(2, '0')}:00:00Z`,
+      duration: 25,
+    }));
+    expect(ach.check(make(24))).toBe(false);
+    expect(ach.check(make(25))).toBe(true);
+  });
+
+  test('five_in_a_day achievement requires 5 sessions on the same day', () => {
+    const ach = ACHIEVEMENTS.find((a) => a.id === 'five_in_a_day');
+    const make = (n) => Array.from({ length: n }, (_, i) => ({
+      date: '2024-01-01',
+      completedAt: `2024-01-01T${String(i).padStart(2, '0')}:00:00Z`,
+      duration: 25,
+    }));
+    expect(ach.check(make(4))).toBe(false);
+    expect(ach.check(make(5))).toBe(true);
+  });
+
+  test('progress function returns current and target', () => {
+    const ach = ACHIEVEMENTS.find((a) => a.id === 'five_sessions');
+    const sessions = Array.from({ length: 3 }, (_, i) => ({
+      date: `2024-01-0${i + 1}`,
+      completedAt: `2024-01-0${i + 1}T10:00:00Z`,
+      duration: 25,
+    }));
+    const { current, target } = ach.progress(sessions);
+    expect(current).toBe(3);
+    expect(target).toBe(5);
+  });
+});
+
+describe('xpForDuration', () => {
+  test('returns 30 XP for 15-min session', () => {
+    expect(xpForDuration(15)).toBe(30);
+  });
+
+  test('returns 50 XP for 25-min session', () => {
+    expect(xpForDuration(25)).toBe(50);
+  });
+
+  test('returns 70 XP for 35-min session', () => {
+    expect(xpForDuration(35)).toBe(70);
+  });
+
+  test('returns 90 XP for 45-min session', () => {
+    expect(xpForDuration(45)).toBe(90);
+  });
+
+  test('falls back to XP_PER_SESSION for unknown duration', () => {
+    expect(xpForDuration(20)).toBe(XP_PER_SESSION);
+  });
+
+  test('XP_BY_DURATION covers all standard durations', () => {
+    expect(Object.keys(XP_BY_DURATION).map(Number)).toEqual(expect.arrayContaining([15, 25, 35, 45]));
+  });
+});
+
+describe('totalFocusMinutes', () => {
+  test('returns 0 for no sessions', () => {
+    expect(totalFocusMinutes([])).toBe(0);
+  });
+
+  test('sums up duration across sessions', () => {
+    const sessions = [
+      { date: '2024-01-01', completedAt: '2024-01-01T10:00:00Z', duration: 25 },
+      { date: '2024-01-02', completedAt: '2024-01-02T10:00:00Z', duration: 35 },
+      { date: '2024-01-03', completedAt: '2024-01-03T10:00:00Z', duration: 15 },
+    ];
+    expect(totalFocusMinutes(sessions)).toBe(75);
+  });
+});
+
+describe('bestWeekCount', () => {
+  test('returns 0 for no sessions', () => {
+    expect(bestWeekCount([])).toBe(0);
+  });
+
+  test('returns the correct best-week count', () => {
+    const sessions = [
+      { completedAt: '2024-01-01T10:00:00Z', date: '2024-01-01', duration: 25 },
+      { completedAt: '2024-01-02T10:00:00Z', date: '2024-01-02', duration: 25 },
+      { completedAt: '2024-01-03T10:00:00Z', date: '2024-01-03', duration: 25 },
+      // gap
+      { completedAt: '2024-02-01T10:00:00Z', date: '2024-02-01', duration: 25 },
+    ];
+    expect(bestWeekCount(sessions)).toBe(3);
+  });
+});
+
+describe('sessionsThisWeek', () => {
+  test('returns 0 for no sessions', () => {
+    expect(sessionsThisWeek([])).toBe(0);
+  });
+
+  test('counts sessions within the last 7 days', () => {
+    const now = new Date().toISOString();
+    const sessions = [
+      { date: now.slice(0, 10), completedAt: now, duration: 25 },
+    ];
+    expect(sessionsThisWeek(sessions)).toBe(1);
+  });
+
+  test('excludes sessions older than 7 days', () => {
+    const old = new Date(Date.now() - 8 * 86400000).toISOString();
+    const sessions = [
+      { date: old.slice(0, 10), completedAt: old, duration: 25 },
+    ];
+    expect(sessionsThisWeek(sessions)).toBe(0);
   });
 });

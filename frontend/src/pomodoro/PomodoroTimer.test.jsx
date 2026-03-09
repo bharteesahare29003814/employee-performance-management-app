@@ -127,11 +127,11 @@ describe('PomodoroTimer', () => {
 
   test('Stats button toggles the stats view', () => {
     render(<PomodoroTimer />);
-    expect(screen.queryByText('Last 7 Days')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last 7 Days/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('📊 Stats'));
-    expect(screen.getByText('Last 7 Days')).toBeInTheDocument();
+    expect(screen.getByText(/Last 7 Days/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('⏱ Timer'));
-    expect(screen.queryByText('Last 7 Days')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last 7 Days/)).not.toBeInTheDocument();
   });
 
   test('shows XP bar with Level 1 initially', () => {
