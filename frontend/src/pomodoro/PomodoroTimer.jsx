@@ -144,8 +144,16 @@ export default function PomodoroTimer() {
   const xpInLevel   = pomData.xp % XP_PER_LEVEL;
   const xpPercent   = Math.round((xpInLevel / XP_PER_LEVEL) * 100);
 
+  const rootClasses = [
+    'pomodoro-root',
+    `theme-${theme}`,
+    ripple && theme !== 'focus' ? 'ripple-bg' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className={`pomodoro-root theme-${theme}${ripple && theme !== 'focus' ? ' ripple-bg' : ''}`}>
+    <div className={rootClasses}>
       {/* ── Theme / sound bar ── */}
       <div className="pom-toolbar">
         <div className="theme-btns" role="group" aria-label="Theme">

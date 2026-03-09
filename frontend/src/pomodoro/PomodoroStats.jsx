@@ -1,6 +1,10 @@
 import React from 'react';
 import { ACHIEVEMENTS, sessionsPerDay, currentStreak, XP_PER_LEVEL } from './pomodoroData';
 
+const WEEK_BAR_MAX_HEIGHT  = 80; // px – tallest bar in the 7-day chart
+const MONTH_BAR_MAX_HEIGHT = 60; // px – tallest bar in the 30-day chart
+const BAR_MIN_EXTRA_HEIGHT = 4;  // px – minimum extra height for non-zero bars
+
 export default function PomodoroStats({ data, theme }) {
   const { sessions = [], xp = 0, level = 1, achievements = {} } = data;
 
@@ -53,7 +57,7 @@ export default function PomodoroStats({ data, theme }) {
             <span className="bar-value">{d.count > 0 ? d.count : ''}</span>
             <div
               className="bar"
-              style={{ height: `${(d.count / maxWeek) * 80 + (d.count > 0 ? 4 : 0)}px` }}
+              style={{ height: `${(d.count / maxWeek) * WEEK_BAR_MAX_HEIGHT + (d.count > 0 ? BAR_MIN_EXTRA_HEIGHT : 0)}px` }}
               title={`${d.date}: ${d.count} session(s)`}
             />
             <span className="bar-label">{shortDate(d.date)}</span>
@@ -68,7 +72,7 @@ export default function PomodoroStats({ data, theme }) {
           <div className="bar-col bar-col-sm" key={d.date}>
             <div
               className="bar"
-              style={{ height: `${(d.count / maxMonth) * 60 + (d.count > 0 ? 4 : 0)}px` }}
+              style={{ height: `${(d.count / maxMonth) * MONTH_BAR_MAX_HEIGHT + (d.count > 0 ? BAR_MIN_EXTRA_HEIGHT : 0)}px` }}
               title={`${d.date}: ${d.count}`}
             />
           </div>
