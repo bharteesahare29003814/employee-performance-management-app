@@ -4,6 +4,23 @@ import { playStart, playEnd, playTick, playLevelUp } from './sounds';
 import PomodoroStats from './PomodoroStats';
 import './PomodoroTimer.css';
 
+// SVG gradient IDs
+const GRADIENT_ID = 'ring-progress-gradient';
+
+// Gradient trail — how far behind the leading colour the trailing stop lags (0–1 ratio units)
+const GRADIENT_TRAIL_OFFSET = 0.15;
+
+// Particle system settings
+const PARTICLE_COUNT      = 40;
+const PARTICLE_MAX_RADIUS = 2.5;
+const PARTICLE_MIN_RADIUS = 0.5;
+const PARTICLE_MAX_VX     = 0.4;   // horizontal drift magnitude
+const PARTICLE_MAX_VY     = 0.7;   // upward speed range
+const PARTICLE_MIN_VY     = 0.15;  // minimum upward speed
+const PARTICLE_MAX_ALPHA  = 0.6;   // initial alpha range high
+const PARTICLE_MIN_ALPHA  = 0.2;   // initial alpha range low
+const PARTICLE_FADE_RATE  = 0.0018; // alpha decrease per frame
+
 /* ── constants ─────────────────────────────────────────────── */
 const DURATION_OPTIONS = [15, 25, 35, 45]; // minutes
 
@@ -62,11 +79,86 @@ export default function PomodoroTimer() {
   const tickRef = useRef(0);
   const intervalRef = useRef(null);
 
+  // Particle effect refs (canvas-based, focus theme only)
+  const canvasRef     = useRef(null);
+  const particlesRef  = useRef([]);
+  const animFrameRef  = useRef(null);
+
   /* ── sound wrapper ──── */
   const sound = useCallback(
     (fn) => { if (soundOn) fn(); },
     [soundOn]
   );
+
+  /* ── particle animation (focus theme) ── */
+  useEffect(() => {
+    if (!running || theme !== 'focus') {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      particlesRef.current = [];
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const parent = canvas.parentElement;
+    canvas.width  = parent ? parent.offsetWidth  : 480;
+    canvas.height = parent ? parent.offsetHeight : 560;
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Initialise particles distributed around the canvas
+    if (particlesRef.current.length === 0) {
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particlesRef.current.push({
+          x:     Math.random() * W,
+          y:     Math.random() * H,
+          r:     Math.random() * PARTICLE_MAX_RADIUS + PARTICLE_MIN_RADIUS,
+          vx:    (Math.random() - 0.5) * PARTICLE_MAX_VX * 2,
+          vy:    -(Math.random() * PARTICLE_MAX_VY + PARTICLE_MIN_VY),
+          alpha: Math.random() * PARTICLE_MAX_ALPHA + PARTICLE_MIN_ALPHA,
+        });
+      }
+    }
+
+    function draw() {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+
+      for (const p of particlesRef.current) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(88,166,255,${p.alpha})`;
+        ctx.fill();
+
+        p.x     += p.vx;
+        p.y     += p.vy;
+        p.alpha -= PARTICLE_FADE_RATE;
+
+        // Reset particle when it drifts offscreen or fades out
+        if (p.y < -5 || p.alpha <= 0) {
+          p.x     = Math.random() * W;
+          p.y     = H + 5;
+          p.alpha = Math.random() * PARTICLE_MAX_ALPHA + PARTICLE_MIN_ALPHA;
+          p.vy    = -(Math.random() * PARTICLE_MAX_VY + PARTICLE_MIN_VY);
+          p.vx    = (Math.random() - 0.5) * PARTICLE_MAX_VX * 2;
+        }
+        if (p.x < 0)  p.x = W;
+        if (p.x > W)  p.x = 0;
+      }
+
+      animFrameRef.current = requestAnimationFrame(draw);
+    }
+
+    draw();
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      particlesRef.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, theme]);
 
   /* ── tick ────────────── */
   useEffect(() => {
@@ -148,12 +240,21 @@ export default function PomodoroTimer() {
     'pomodoro-root',
     `theme-${theme}`,
     ripple && theme !== 'focus' ? 'ripple-bg' : '',
+    ripple && theme === 'focus'  ? 'focus-pulse-bg' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
     <div className={rootClasses}>
+      {/* ── Particle canvas (focus theme only) ── */}
+      {theme === 'focus' && (
+        <canvas
+          ref={canvasRef}
+          className="particles-canvas"
+          aria-hidden="true"
+        />
+      )}
       {/* ── Theme / sound bar ── */}
       <div className="pom-toolbar">
         <div className="theme-btns" role="group" aria-label="Theme">
@@ -209,6 +310,13 @@ export default function PomodoroTimer() {
               aria-label={`Timer: ${formatTime(secondsLeft)} remaining`}
               role="img"
             >
+              {/* Gradient definition – colours track the progress ratio */}
+              <defs>
+                <linearGradient id={GRADIENT_ID} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stopColor={progressColor(Math.max(0, ratio - GRADIENT_TRAIL_OFFSET))} />
+                  <stop offset="100%" stopColor={ringColor} />
+                </linearGradient>
+              </defs>
               {/* Background ring */}
               <circle
                 cx={110}
@@ -225,13 +333,14 @@ export default function PomodoroTimer() {
                 cy={110}
                 r={RADIUS}
                 fill="none"
-                stroke={ringColor}
+                stroke={`url(#${GRADIENT_ID})`}
                 strokeWidth={STROKE}
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={dashOffset}
                 strokeLinecap="round"
                 transform="rotate(-90 110 110)"
-                style={{ transition: running ? 'stroke-dashoffset 1s linear, stroke 1s linear' : 'none' }}
+                className={theme === 'focus' && running ? 'ring-glow' : ''}
+                style={{ transition: running ? 'stroke-dashoffset 1s linear' : 'none' }}
               />
               {/* Time text */}
               <text
