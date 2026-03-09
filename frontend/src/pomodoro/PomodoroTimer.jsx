@@ -185,7 +185,7 @@ export default function PomodoroTimer() {
   /* ── session complete ─── */
   function handleSessionComplete() {
     sound(playEnd);
-    const { data, leveledUp, newlyUnlocked } = recordSession(durationMin);
+    const { data, leveledUp, newlyUnlocked, xpGained } = recordSession(durationMin);
     setPomData(data);
 
     if (leveledUp) {
@@ -194,7 +194,7 @@ export default function PomodoroTimer() {
     } else if (newlyUnlocked.length > 0) {
       showToast(`🏅 Achievement unlocked: ${newlyUnlocked[0].label}`, 'achievement');
     } else {
-      showToast('✅ Pomodoro complete! Great work!', 'success');
+      showToast(`✅ +${xpGained} XP! Pomodoro complete!`, 'success');
     }
   }
 
